@@ -78,7 +78,15 @@ public class AvroSchemaConverter {
       if (field.schema().getType().equals(Schema.Type.NULL)) {
         continue; // Avro nulls are not encoded, unless they are null unions
       }
-      types.add(convertField(field));
+      if (field.schema().getType().equals(Schema.Type.LONG) 
+				&& field.getProp("sqlType") != null
+				&& field.getProp("sqlType").equals("93")) {
+			//Write Impala TIMESTAMP
+			types.add(primitive(field.name(), INT96,
+					Type.Repetition.REQUIRED));
+		} else {
+			types.add(convertField(field));
+		}
     }
     return types;
   }

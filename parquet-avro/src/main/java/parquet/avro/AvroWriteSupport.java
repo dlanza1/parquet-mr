@@ -19,6 +19,9 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import jodd.datetime.JDateTime;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
@@ -27,12 +30,18 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.hadoop.conf.Configuration;
+
+import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
+
 import parquet.hadoop.api.WriteSupport;
 import parquet.io.api.Binary;
 import parquet.io.api.RecordConsumer;
 import parquet.schema.GroupType;
 import parquet.schema.MessageType;
+import parquet.schema.PrimitiveType;
 import parquet.schema.Type;
 
 /**
@@ -43,6 +52,11 @@ import parquet.schema.Type;
 public class AvroWriteSupport extends WriteSupport<IndexedRecord> {
 
   private static final String AVRO_SCHEMA = "parquet.avro.schema";
+  
+  //Support to unit conversions
+  private static final long NANO_MILLI_CONV = (long) Math.pow(10, 6);
+  private static final long NANO_CONV = (long) Math.pow(10, 9);
+  private static final long MILLI_SECOND_CONV = (long) Math.pow(10, 3);
 
   private RecordConsumer recordConsumer;
   private MessageType rootSchema;
@@ -193,7 +207,12 @@ public class AvroWriteSupport extends WriteSupport<IndexedRecord> {
     } else if (avroType.equals(Schema.Type.INT)) {
       recordConsumer.addInteger(((Number) value).intValue());
     } else if (avroType.equals(Schema.Type.LONG)) {
-      recordConsumer.addLong(((Number) value).longValue());
+    	if (type.asPrimitiveType().getPrimitiveTypeName()
+    		.equals(PrimitiveType.PrimitiveTypeName.INT96)) {
+    		writeImpalaTimestamp(recordConsumer, (Long) value);
+		} else {
+			recordConsumer.addLong(((Number) value).longValue());
+		}
     } else if (avroType.equals(Schema.Type.FLOAT)) {
       recordConsumer.addFloat(((Number) value).floatValue());
     } else if (avroType.equals(Schema.Type.DOUBLE)) {
@@ -216,6 +235,32 @@ public class AvroWriteSupport extends WriteSupport<IndexedRecord> {
       recordConsumer.addBinary(Binary.fromByteArray(((GenericFixed) value).bytes()));
     }
   }
+  
+	private void writeImpalaTimestamp(RecordConsumer recordConsumer,
+			Long nanoseconds) {
+
+		long milliseconds = nanoseconds / NANO_MILLI_CONV;
+		JDateTime jdt = new JDateTime(milliseconds);
+
+		// Get nanoseconds of the day and get bytes (little-endian format)
+		long seconds_of_day = jdt.getMillisOfDay() / MILLI_SECOND_CONV;
+		long nanoseconds_fraction_of_second = nanoseconds % NANO_CONV;
+		long nanoseconds_of_day = seconds_of_day * NANO_CONV
+				+ nanoseconds_fraction_of_second;
+		byte[] b_ns = Longs.toByteArray(nanoseconds_of_day);
+		ArrayUtils.reverse(b_ns);
+
+		// Get Julian Day and get bytes (little-endian format)
+		byte[] b_julian_days = Ints.toByteArray(jdt.getJulianDayNumber());
+		ArrayUtils.reverse(b_julian_days);
+
+		// Fill buffer
+		ByteBuffer buf = ByteBuffer.allocate(12);
+		buf.put(b_ns).put(b_julian_days).flip();
+
+		// Write
+		recordConsumer.addBinary(Binary.fromByteBuffer(buf));
+	}
 
   private Binary fromAvroString(Object value) {
     if (value instanceof Utf8) {
