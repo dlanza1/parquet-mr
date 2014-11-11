@@ -74,6 +74,27 @@ public class AvroParquetWriter<T extends IndexedRecord> extends ParquetWriter<T>
     this(file, avroSchema, CompressionCodecName.UNCOMPRESSED,
 	  DEFAULT_BLOCK_SIZE, DEFAULT_PAGE_SIZE);
   }
+  
+  /** Create a new {@link AvroParquetWriter}.
+  *
+  * @param file The file name to write to.
+  * @param avroSchema The schema to write with.
+  * @param compressionCodecName Compression code to use, or CompressionCodecName.UNCOMPRESSED
+  * @param blockSize the block size threshold.
+  * @param pageSize See parquet write up. Blocks are subdivided into pages for alignment and other purposes.
+  * @param enableDictionary Whether to use a dictionary to compress columns.
+  * @param conf The Configuration to use.
+  * @param file_per_block Generate a Parquet file per block
+  * @throws IOException
+  */
+ public AvroParquetWriter(Path file, Schema avroSchema,
+                          CompressionCodecName compressionCodecName,
+                          int blockSize, int pageSize, boolean enableDictionary,
+                          Configuration conf, boolean file_per_block) throws IOException {
+   super(file, AvroParquetWriter.<T>writeSupport(avroSchema),
+       compressionCodecName, blockSize, pageSize, pageSize, enableDictionary,
+       DEFAULT_IS_VALIDATING_ENABLED, DEFAULT_WRITER_VERSION, conf, file_per_block);
+ }
 
   /** Create a new {@link AvroParquetWriter}.
    *

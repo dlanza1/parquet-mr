@@ -17,6 +17,7 @@ package parquet.hadoop;
 
 import java.io.IOException;
 import java.util.Map;
+
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
@@ -78,7 +79,11 @@ public class ParquetRecordWriter<T> extends RecordWriter<Void, T> {
    */
   @Override
   public void write(Void key, T value) throws IOException, InterruptedException {
-    internalWriter.write(value);
+    try {
+		internalWriter.write(value);
+	} catch (BlockSizeReachedException e) {
+		throw new InterruptedException("End of file when black size reached");
+	}
   }
 
 }

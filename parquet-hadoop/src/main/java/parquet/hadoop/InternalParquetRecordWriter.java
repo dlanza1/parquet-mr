@@ -53,6 +53,7 @@ class InternalParquetRecordWriter<T> {
   private final boolean enableDictionary;
   private final boolean validating;
   private final WriterVersion writerVersion;
+  private final boolean file_per_row_group;
 
   private long recordCount = 0;
   private long recordCountForNextMemCheck = MINIMUM_RECORD_COUNT_FOR_CHECK;
@@ -80,18 +81,48 @@ class InternalParquetRecordWriter<T> {
       boolean enableDictionary,
       boolean validating,
       WriterVersion writerVersion) {
-    this.parquetFileWriter = parquetFileWriter;
-    this.writeSupport = checkNotNull(writeSupport, "writeSupport");
-    this.schema = schema;
-    this.extraMetaData = extraMetaData;
-    this.rowGroupSize = rowGroupSize;
-    this.pageSize = pageSize;
-    this.compressor = compressor;
-    this.dictionaryPageSize = dictionaryPageSize;
-    this.enableDictionary = enableDictionary;
-    this.validating = validating;
-    this.writerVersion = writerVersion;
-    initStore();
+    
+	  this(parquetFileWriter, 
+			  writeSupport, 
+			  schema, 
+			  extraMetaData, 
+			  rowGroupSize, 
+			  pageSize, 
+			  compressor, 
+			  dictionaryPageSize, 
+			  enableDictionary, 
+			  validating, 
+			  writerVersion, 
+			  false);
+  }
+  
+  public InternalParquetRecordWriter(
+	      ParquetFileWriter parquetFileWriter,
+	      WriteSupport<T> writeSupport,
+	      MessageType schema,
+	      Map<String, String> extraMetaData,
+	      int rowGroupSize,
+	      int pageSize,
+	      BytesCompressor compressor,
+	      int dictionaryPageSize,
+	      boolean enableDictionary,
+	      boolean validating,
+	      WriterVersion writerVersion,
+	      boolean file_per_row_group) {
+	    this.parquetFileWriter = parquetFileWriter;
+	    this.writeSupport = checkNotNull(writeSupport, "writeSupport");
+	    this.schema = schema;
+	    this.extraMetaData = extraMetaData;
+	    this.rowGroupSize = rowGroupSize;
+	    this.pageSize = pageSize;
+	    this.compressor = compressor;
+	    this.dictionaryPageSize = dictionaryPageSize;
+	    this.enableDictionary = enableDictionary;
+	    this.validating = validating;
+	    this.writerVersion = writerVersion;
+	    this.file_per_row_group = file_per_row_group;
+	    
+	    initStore();
   }
 
   private void initStore() {
@@ -116,20 +147,31 @@ class InternalParquetRecordWriter<T> {
     parquetFileWriter.end(finalMetadata);
   }
 
-  public void write(T value) throws IOException, InterruptedException {
+  public void write(T value) throws IOException, InterruptedException, BlockSizeReachedException {
     writeSupport.write(value);
     ++ recordCount;
     checkBlockSizeReached();
   }
 
-  private void checkBlockSizeReached() throws IOException {
+  private void checkBlockSizeReached() throws IOException, InterruptedException, BlockSizeReachedException {
     if (recordCount >= recordCountForNextMemCheck) { // checking the memory size is relatively expensive, so let's not do it for every record.
       long memSize = columnStore.memSize();
       if (memSize > rowGroupSize) {
-        LOG.info(format("mem size %,d > %,d: flushing %,d records to disk.", memSize, rowGroupSize, recordCount));
-        flushRowGroupToStore();
-        initStore();
-        recordCountForNextMemCheck = min(max(MINIMUM_RECORD_COUNT_FOR_CHECK, recordCount / 2), MAXIMUM_RECORD_COUNT_FOR_CHECK);
+        
+        if(file_per_row_group){
+        	close();
+        	
+        	LOG.info(format("mem size %,d > %,d: flushing %,d records to disk and file closed.", memSize, rowGroupSize, recordCount));
+        	
+        	throw new BlockSizeReachedException();
+        }else{
+        	LOG.info(format("mem size %,d > %,d: flushing %,d records to disk. mi ve", memSize, rowGroupSize, recordCount));
+        	
+        	flushRowGroupToStore();
+        	initStore();
+        	recordCountForNextMemCheck = min(max(MINIMUM_RECORD_COUNT_FOR_CHECK, recordCount / 2), MAXIMUM_RECORD_COUNT_FOR_CHECK);
+        }
+        
       } else {
         float recordSize = (float) memSize / recordCount;
         recordCountForNextMemCheck = min(

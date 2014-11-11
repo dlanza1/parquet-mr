@@ -11,6 +11,7 @@ import org.apache.hadoop.fs.Path;
 import parquet.example.data.Group;
 import parquet.example.data.simple.SimpleGroup;
 import parquet.filter2.compat.FilterCompat.Filter;
+import parquet.hadoop.BlockSizeReachedException;
 import parquet.hadoop.ParquetReader;
 import parquet.hadoop.ParquetWriter;
 import parquet.hadoop.example.GroupReadSupport;
@@ -216,7 +217,11 @@ public class PhoneBookWriter {
 
     ParquetWriter<Group> writer = new ParquetWriter<Group>(new Path(f.getAbsolutePath()), conf, new GroupWriteSupport());
     for (User u : users) {
-      writer.write(groupFromUser(u));
+      try {
+		writer.write(groupFromUser(u));
+	  } catch (BlockSizeReachedException e) {
+		throw new IOException("End of file when black size reached");
+	  }
     }
     writer.close();
   }

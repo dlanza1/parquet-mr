@@ -150,8 +150,13 @@ public class ParquetFileWriter {
   public ParquetFileWriter(Configuration configuration, MessageType schema, Path file) throws IOException {
     super();
     this.schema = schema;
+
     FileSystem fs = file.getFileSystem(configuration);
-    this.out = fs.create(file, false);
+    
+    this.out = fs.create(file, false, 
+    		fs.getConf().getInt("io.file.buffer.size", 4096), 
+    		fs.getDefaultReplication(), 
+    		configuration.getLong("dfs.block.size", fs.getDefaultBlockSize()));
   }
 
   /**

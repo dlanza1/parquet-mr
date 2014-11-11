@@ -142,7 +142,7 @@ public class ParquetWriter<T> implements Closeable {
       WriterVersion writerVersion) throws IOException {
     this(file, writeSupport, compressionCodecName, blockSize, pageSize, dictionaryPageSize, enableDictionary, validating, writerVersion, new Configuration());
   }
-
+  
   /**
    * Create a new ParquetWriter.
    *
@@ -170,9 +170,55 @@ public class ParquetWriter<T> implements Closeable {
       WriterVersion writerVersion,
       Configuration conf) throws IOException {
 
+	  this(file,
+			  writeSupport, 
+			  compressionCodecName, 
+			  blockSize, 
+			  pageSize, 
+			  dictionaryPageSize, 
+			  enableDictionary, 
+			  validating, 
+			  writerVersion, 
+			  conf, 
+			  false);
+  }
+
+  /**
+   * Create a new ParquetWriter.
+   *
+   * @param file the file to create
+   * @param writeSupport the implementation to write a record to a RecordConsumer
+   * @param compressionCodecName the compression codec to use
+   * @param blockSize the block size threshold
+   * @param pageSize the page size threshold
+   * @param dictionaryPageSize the page size threshold for the dictionary pages
+   * @param enableDictionary to turn dictionary encoding on
+   * @param validating to turn on validation using the schema
+   * @param writerVersion version of parquetWriter from {@link ParquetProperties.WriterVersion}
+   * @param conf Hadoop configuration to use while accessing the filesystem
+   * @param file_per_block Generate a Parquet file per block
+   * @throws IOException
+   */
+  public ParquetWriter(
+      Path file,
+      WriteSupport<T> writeSupport,
+      CompressionCodecName compressionCodecName,
+      int blockSize,
+      int pageSize,
+      int dictionaryPageSize,
+      boolean enableDictionary,
+      boolean validating,
+      WriterVersion writerVersion,
+      Configuration conf,
+      boolean file_per_block) throws IOException {
+
     WriteSupport.WriteContext writeContext = writeSupport.init(conf);
     MessageType schema = writeContext.getSchema();
 
+    //Each HDFS block contain a Parquet block
+    if(file_per_block)
+    	conf.setLong("dfs.block.size", blockSize + 1024 * 1024);
+    
     ParquetFileWriter fileWriter = new ParquetFileWriter(conf, schema, file);
     fileWriter.start();
 
@@ -189,7 +235,8 @@ public class ParquetWriter<T> implements Closeable {
         dictionaryPageSize,
         enableDictionary,
         validating,
-        writerVersion);
+        writerVersion,
+        file_per_block);
   }
 
   /**
@@ -217,7 +264,7 @@ public class ParquetWriter<T> implements Closeable {
         conf);
   }
 
-  public void write(T object) throws IOException {
+  public void write(T object) throws IOException, BlockSizeReachedException {
     try {
       writer.write(object);
     } catch (InterruptedException e) {
