@@ -78,31 +78,27 @@ public class AvroSchemaConverter {
       if (field.schema().getType().equals(Schema.Type.NULL)) {
         continue; // Avro nulls are not encoded, unless they are null unions
       }
-      if (field.schema().getType().equals(Schema.Type.LONG) 
-				&& field.getProp("sqlType") != null
-				&& field.getProp("sqlType").equals("93")) {
-			//Write Impala TIMESTAMP
-			types.add(primitive(field.name(), INT96,
-					Type.Repetition.REQUIRED));
-		} else {
-			types.add(convertField(field));
-		}
+      
+      types.add(convertField(field));
     }
     return types;
   }
 
-  private Type convertField(String fieldName, Schema schema) {
-    return convertField(fieldName, schema, Type.Repetition.REQUIRED);
+  private Type convertField(String fieldName, Schema schema, boolean impala_timestamp) {
+    return convertField(fieldName, schema, Type.Repetition.REQUIRED, impala_timestamp);
   }
 
-  private Type convertField(String fieldName, Schema schema, Type.Repetition repetition) {
+  private Type convertField(String fieldName, Schema schema, Type.Repetition repetition, boolean impala_timestamp) {
     Schema.Type type = schema.getType();
     if (type.equals(Schema.Type.BOOLEAN)) {
       return primitive(fieldName, BOOLEAN, repetition);
     } else if (type.equals(Schema.Type.INT)) {
       return primitive(fieldName, INT32, repetition);
     } else if (type.equals(Schema.Type.LONG)) {
-      return primitive(fieldName, INT64, repetition);
+    	if(impala_timestamp)
+    		return primitive(fieldName, INT96, repetition);
+    	else
+    		return primitive(fieldName, INT64, repetition);
     } else if (type.equals(Schema.Type.FLOAT)) {
       return primitive(fieldName, FLOAT, repetition);
     } else if (type.equals(Schema.Type.DOUBLE)) {
@@ -117,21 +113,21 @@ public class AvroSchemaConverter {
       return primitive(fieldName, BINARY, repetition, ENUM);
     } else if (type.equals(Schema.Type.ARRAY)) {
       return ConversionPatterns.listType(repetition, fieldName,
-          convertField("array", schema.getElementType(), Type.Repetition.REPEATED));
+          convertField("array", schema.getElementType(), Type.Repetition.REPEATED, impala_timestamp));
     } else if (type.equals(Schema.Type.MAP)) {
-      Type valType = convertField("value", schema.getValueType());
+      Type valType = convertField("value", schema.getValueType(), impala_timestamp);
       // avro map key type is always string
       return ConversionPatterns.stringKeyMapType(repetition, fieldName, valType);
     } else if (type.equals(Schema.Type.FIXED)) {
       return primitive(fieldName, FIXED_LEN_BYTE_ARRAY, repetition,
                        schema.getFixedSize(), null);
     } else if (type.equals(Schema.Type.UNION)) {
-      return convertUnion(fieldName, schema, repetition);
+      return convertUnion(fieldName, schema, repetition, impala_timestamp);
     }
     throw new UnsupportedOperationException("Cannot convert Avro type " + type);
   }
 
-  private Type convertUnion(String fieldName, Schema schema, Type.Repetition repetition) {
+  private Type convertUnion(String fieldName, Schema schema, Type.Repetition repetition, boolean impala_timestamp) {
     List<Schema> nonNullSchemas = new ArrayList(schema.getTypes().size());
     for (Schema childSchema : schema.getTypes()) {
       if (childSchema.getType().equals(Schema.Type.NULL)) {
@@ -149,20 +145,24 @@ public class AvroSchemaConverter {
         throw new UnsupportedOperationException("Cannot convert Avro union of only nulls");
 
       case 1:
-        return convertField(fieldName, nonNullSchemas.get(0), repetition);
+        return convertField(fieldName, nonNullSchemas.get(0), repetition, impala_timestamp);
 
       default: // complex union type
         List<Type> unionTypes = new ArrayList(nonNullSchemas.size());
         int index = 0;
         for (Schema childSchema : nonNullSchemas) {
-          unionTypes.add( convertField("member" + index++, childSchema, Type.Repetition.OPTIONAL));
+          unionTypes.add( convertField("member" + index++, childSchema, Type.Repetition.OPTIONAL, impala_timestamp));
         }
         return new GroupType(repetition, fieldName, unionTypes);
     }
   }
 
   private Type convertField(Schema.Field field) {
-    return convertField(field.name(), field.schema());
+	//Check if the field is of the type TIMESTAMP
+	  return field.getProp("sqlType") != null
+				&& field.getProp("sqlType").equals("93") 
+		  ? convertField(field.name(), field.schema(), true)
+		  : convertField(field.name(), field.schema(), false);
   }
 
   private PrimitiveType primitive(String name, 
