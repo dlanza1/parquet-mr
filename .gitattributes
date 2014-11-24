@@ -14,25 +14,23 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-*.eml
-*.iml
-*.ipr
-*.iws
-*.log
-*~
-.classpath
-.idea
-.project
-.settings
-nb-configuration.xml
-patch-process
-target
 
-# Sqoop1 specific
-.ant-targets-build.xml
-.launches
-/build
-/build.properties
-/conf/managers.d
-/conf/tools.d
-/tags
+# Auto detect text files and perform LF normalization
+*        text=auto
+
+*.cs     text diff=csharp
+*.java   text diff=java
+*.html   text diff=html
+*.py     text diff=python
+*.pl     text diff=perl
+*.pm     text diff=perl
+*.css    text
+*.js     text
+*.sql    text
+
+*.sh     text eol=lf
+
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+*.csproj text merge=union eol=crlf
+*.sln    text merge=union eol=crlf

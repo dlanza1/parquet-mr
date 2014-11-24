@@ -14,25 +14,6 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-*.eml
-*.iml
-*.ipr
-*.iws
-*.log
-*~
-.classpath
-.idea
-.project
-.settings
-nb-configuration.xml
-patch-process
-target
-
-# Sqoop1 specific
-.ant-targets-build.xml
-.launches
-/build
-/build.properties
-/conf/managers.d
-/conf/tools.d
-/tags
+/Sqoop-manpage.xml
+/sqoop.1
+/Sqoop-web.html
