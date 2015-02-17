@@ -23,14 +23,18 @@ import static parquet.hadoop.ParquetWriter.DEFAULT_BLOCK_SIZE;
 import static parquet.hadoop.ParquetWriter.DEFAULT_PAGE_SIZE;
 
 import com.google.common.collect.ImmutableList;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
 import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.junit.Test;
+
+import parquet.hadoop.BlockSizeReachedException;
 import parquet.hadoop.ParquetReader;
 import parquet.hadoop.ParquetWriter;
 import parquet.hadoop.metadata.CompressionCodecName;
@@ -42,7 +46,7 @@ import parquet.hadoop.metadata.CompressionCodecName;
 public class TestSpecificReadWrite {
 
   @Test
-  public void testReadWriteSpecific() throws IOException {
+  public void testReadWriteSpecific() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(10, CompressionCodecName.UNCOMPRESSED, false);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path);
     for (int i = 0; i < 10; i++) {
@@ -54,7 +58,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testReadWriteSpecificWithDictionary() throws IOException {
+  public void testReadWriteSpecificWithDictionary() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(10, CompressionCodecName.UNCOMPRESSED, true);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path);
     for (int i = 0; i < 10; i++) {
@@ -66,7 +70,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testFilterMatchesMultiple() throws IOException {
+  public void testFilterMatchesMultiple() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(10, CompressionCodecName.UNCOMPRESSED, false);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path, column("make", equalTo("Volkswagen")));
     for (int i = 0; i < 10; i++) {
@@ -77,7 +81,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testFilterMatchesMultipleBlocks() throws IOException {
+  public void testFilterMatchesMultipleBlocks() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(10000, CompressionCodecName.UNCOMPRESSED, false, DEFAULT_BLOCK_SIZE/64, DEFAULT_PAGE_SIZE/64);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path, column("make", equalTo("Volkswagen")));
     for (int i = 0; i < 10000; i++) {
@@ -88,14 +92,14 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testFilterMatchesNoBlocks() throws IOException {
+  public void testFilterMatchesNoBlocks() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(10000, CompressionCodecName.UNCOMPRESSED, false, DEFAULT_BLOCK_SIZE/64, DEFAULT_PAGE_SIZE/64);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path, column("make", equalTo("Bogus")));
     assertNull(reader.read());
   }
 
   @Test
-  public void testFilterMatchesFinalBlockOnly() throws IOException {
+  public void testFilterMatchesFinalBlockOnly() throws IOException, BlockSizeReachedException {
     File tmp = File.createTempFile(getClass().getSimpleName(), ".tmp");
     tmp.deleteOnExit();
     tmp.delete();
@@ -123,7 +127,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testFilterWithDictionary() throws IOException {
+  public void testFilterWithDictionary() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(1,CompressionCodecName.UNCOMPRESSED,true);
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path, column("make", equalTo("Volkswagen")));
     assertEquals(getVwPolo().toString(), reader.read().toString());
@@ -132,7 +136,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testFilterOnSubAttribute() throws IOException {
+  public void testFilterOnSubAttribute() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(1, CompressionCodecName.UNCOMPRESSED, false);
     
     ParquetReader<Car> reader = new AvroParquetReader<Car>(path, column("engine.type", equalTo(EngineType.DIESEL)));
@@ -149,7 +153,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testProjection() throws IOException {
+  public void testProjection() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(1, CompressionCodecName.UNCOMPRESSED, false);
     Configuration conf = new Configuration();
 
@@ -188,7 +192,7 @@ public class TestSpecificReadWrite {
   }
 
   @Test
-  public void testAvroReadSchema() throws IOException {
+  public void testAvroReadSchema() throws IOException, BlockSizeReachedException {
     Path path = writeCarsToParquetFile(1, CompressionCodecName.UNCOMPRESSED, false);
     Configuration conf = new Configuration();
     AvroReadSupport.setAvroReadSchema(conf, NewCar.SCHEMA$);
@@ -204,11 +208,11 @@ public class TestSpecificReadWrite {
     }
   }
 
-  private Path writeCarsToParquetFile( int num, CompressionCodecName compression, boolean enableDictionary) throws IOException {
+  private Path writeCarsToParquetFile( int num, CompressionCodecName compression, boolean enableDictionary) throws IOException, BlockSizeReachedException {
     return writeCarsToParquetFile(num, compression, enableDictionary, DEFAULT_BLOCK_SIZE, DEFAULT_PAGE_SIZE);
   }
 
-  private Path writeCarsToParquetFile( int num, CompressionCodecName compression, boolean enableDictionary, int blockSize, int pageSize) throws IOException {
+  private Path writeCarsToParquetFile( int num, CompressionCodecName compression, boolean enableDictionary, int blockSize, int pageSize) throws IOException, BlockSizeReachedException {
     File tmp = File.createTempFile(getClass().getSimpleName(), ".tmp");
     tmp.deleteOnExit();
     tmp.delete();
